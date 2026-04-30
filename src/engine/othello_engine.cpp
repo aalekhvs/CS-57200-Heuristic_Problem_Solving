@@ -1,166 +1,160 @@
-### 3. `/src/engine/othello_engine.cpp`
-This file implements the ultra-optimized 64-bit bitboard logic, Zobrist hashing, and the two search paths (Baseline vs. Enhanced).[1, 2]
-
-```cpp
 #include <iostream>
 #include <vector>
 #include <cstdint>
 #include <unordered_map>
 #include <algorithm>
+#include <cstdlib>
+#include <functional> // REQUIRED: For Python callback mapping
 
 typedef uint64_t Bitboard;
 
 struct TTEntry {
-    uint64_t signature;
     int score;
     int depth;
-    uint8_t type; // 0: EXACT, 1: LOWERBOUND, 2: UPPERBOUND
+    uint8_t type; 
     int bestMove;
 };
 
 class OthelloEngine {
 private:
-    uint64_t zobristTable[3];
-    uint64_t sideToMoveHash;
+    uint64_t zobristKeys[2][64]; 
+    uint64_t sideToMoveKey;
     std::unordered_map<uint64_t, TTEntry> transpositionTable;
-    int killerMoves[3]; // [ply][slot]
+    int killerMoves[64][2] = {{0}}; 
 
 public:
     OthelloEngine() {
-        // Initialize Zobrist keys with random 64-bit values [2]
-        for(int i=0; i<64; i++) {
-            zobristTable[i] = (uint64_t)rand() << 32 | rand();
-            zobristTable[i][4] = (uint64_t)rand() << 32 | rand();
-        }
-        sideToMoveHash = (uint64_t)rand() << 32 | rand();
+        initializeZobrist();
     }
 
-    // ==========================================
-    // BASELINE PATH: Standard Alpha-Beta [5]
-    // ==========================================
-    int minimax_baseline(Bitboard self, Bitboard opp, int depth, int alpha, int beta, bool maxPlayer) {
-        if (depth == 0 |
-
-| is_terminal(self, opp)) {
-            return static_evaluation(self, opp);
-        }
-
-        Bitboard moves = generate_moves(self, opp);
-        if (moves == 0) return minimax_baseline(opp, self, depth - 1, alpha, beta,!maxPlayer);
-
-        if (maxPlayer) {
-            int maxEval = -1000000;
-            for (int i : bit_indices(moves)) {
-                Bitboard nextSelf, nextOpp;
-                apply_move(self, opp, i, nextSelf, nextOpp);
-                int eval = minimax_baseline(nextOpp, nextSelf, depth - 1, alpha, beta, false);
-                maxEval = std::max(maxEval, eval);
-                alpha = std::max(alpha, eval);
-                if (beta <= alpha) break; // Pruning
-            }
-            return maxEval;
-        } else {
-            int minEval = 1000000;
-            for (int i : bit_indices(moves)) {
-                Bitboard nextSelf, nextOpp;
-                apply_move(self, opp, i, nextSelf, nextOpp);
-                int eval = minimax_baseline(nextOpp, nextSelf, depth - 1, alpha, beta, true);
-                minEval = std::min(minEval, eval);
-                beta = std::min(beta, eval);
-                if (beta <= alpha) break; // Pruning
-            }
-            return minEval;
-        }
-    }
-
-    // ==========================================
-    // ENHANCEMENT PATH: TT + Move Ordering [6, 7]
-    // ==========================================
-    int minimax_enhanced(Bitboard self, Bitboard opp, int depth, int alpha, int beta, int ply, uint64_t currentHash) {
-        // 1. Transposition Table Probe [8]
-        if (transpositionTable.count(currentHash)) {
-            TTEntry entry = transpositionTable[currentHash];
-            if (entry.depth >= depth) {
-                if (entry.type == 0) return entry.score;
-                if (entry.type == 1) alpha = std::max(alpha, entry.score);
-                else if (entry.type == 2) beta = std::min(beta, entry.score);
-                if (alpha >= beta) return entry.score;
-            }
-        }
-
-        if (depth == 0) return static_evaluation(self, opp);
-
-        // 2. Dynamic Move Ordering (Killer Heuristic) [9]
-        std::vector<int> moves = get_ordered_moves(self, opp, ply);
-        
-        int bestScore = -1000000;
-        int bestM = -1;
-
-        for (int m : moves) {
-            Bitboard nextSelf, nextOpp;
-            apply_move(self, opp, m, nextSelf, nextOpp);
-            uint64_t nextHash = update_hash(currentHash, m, self, opp);
-            
-            int score = -minimax_enhanced(nextOpp, nextSelf, depth - 1, -beta, -alpha, ply + 1, nextHash);
-            
-            if (score > bestScore) {
-                bestScore = score;
-                bestM = m;
-            }
-            alpha = std::max(alpha, score);
-            if (alpha >= beta) {
-                // Store Killer Move [10]
-                killerMoves[ply][4] = killerMoves[ply];
-                killerMoves[ply] = m;
-                break;
-            }
-        }
-
-        // Store result in TT
-        TTEntry newEntry = {currentHash, bestScore, depth, 0, bestM};
-        transpositionTable[currentHash] = newEntry;
-        return bestScore;
-    }
-
-    // Helper: Bitboard move generation using bitshifts [1]
-    Bitboard generate_moves(Bitboard self, Bitboard opp) {
+    Bitboard generateMoves(Bitboard own, Bitboard opp) {
+        Bitboard empty = ~(own | opp);
         Bitboard mask = opp & 0x7E7E7E7E7E7E7E7EULL;
         Bitboard moves = 0;
-        // Directional shifts (e.g., Left)
-        Bitboard t = mask & (self << 1);
-        for(int i=0; i<5; i++) t |= mask & (t << 1);
-        moves |= ~(self | opp) & (t << 1);
-        //... (Repeat for other 7 directions)
+
+        auto shift = [](Bitboard b, int dir) -> Bitboard {
+            if (dir == 1) return (b << 1) & 0xFEFEFEFEFEFEFEFEULL;
+            if (dir == -1) return (b >> 1) & 0x7F7F7F7F7F7F7F7FULL;
+            if (dir == 8) return b << 8;
+            if (dir == -8) return b >> 8;
+            if (dir == 7) return (b << 7) & 0xFEFEFEFEFEFEFEFEULL;
+            if (dir == 9) return (b << 9) & 0x7F7F7F7F7F7F7F7FULL;
+            if (dir == -7) return (b >> 7) & 0x7F7F7F7F7F7F7F7FULL;
+            if (dir == -9) return (b >> 9) & 0xFEFEFEFEFEFEFEFEULL;
+            return 0;
+        };
+
+        int directions[] = {1, -1, 8, -8, 7, 9, -7, -9}; 
+        for (int d : directions) {
+            Bitboard candidates = shift(own, d) & opp;
+            for (int i = 0; i < 5; ++i) candidates |= shift(candidates, d) & opp;
+            moves |= shift(candidates, d) & empty;
+        }
         return moves;
     }
 
-    void apply_move(Bitboard self, Bitboard opp, int pos, Bitboard& nS, Bitboard& nO) {
-        // Instant flipping using XOR masks [11]
-        Bitboard moveBit = 1ULL << pos;
-        Bitboard flipped = 0; 
-        //... (Calculate flipped mask using bitwise logic)
-        nS = self | moveBit | flipped;
-        nO = opp ^ flipped;
+    int searchBaseline(Bitboard b, Bitboard w, int depth, int alpha, int beta, bool isBlack) {
+        if (depth == 0 || isTerminal(b, w)) return staticEval(b, w);
+
+        Bitboard moves = generateMoves(isBlack ? b : w, isBlack ? w : b);
+        if (moves == 0) return searchBaseline(b, w, depth - 1, alpha, beta, !isBlack);
+
+        int best = isBlack ? -100000 : 100000;
+        for (int m : getIndices(moves)) {
+            Bitboard nb = b, nw = w;
+            applyMove(nb, nw, m, isBlack);
+            int score = searchBaseline(nb, nw, depth - 1, alpha, beta, !isBlack);
+            if (isBlack) {
+                best = std::max(best, score);
+                alpha = std::max(alpha, best);
+            } else {
+                best = std::min(best, score);
+                beta = std::min(beta, best);
+            }
+            if (beta <= alpha) break;
+        }
+        return best;
     }
 
-    int static_evaluation(Bitboard self, Bitboard opp) {
-        // Weighted linear sum: Corners, Mobility, Parity [12]
-        return __builtin_popcountll(self) - __builtin_popcountll(opp);
+    // FINAL UPDATE: Accepts nnEval python callback
+    int searchEnhanced(Bitboard b, Bitboard w, int depth, int alpha, int beta, bool isBlack, int ply, uint64_t hash, std::function<int(Bitboard, Bitboard)> nnEval = nullptr) {
+        if (transpositionTable.count(hash) && transpositionTable[hash].depth >= depth) {
+            return transpositionTable[hash].score;
+        }
+
+        if (depth == 0 || isTerminal(b, w)) {
+            // SELECTIVE EVALUATION: Query PyTorch if callback exists, else use fast static
+            if (nnEval != nullptr) {
+                return nnEval(b, w);
+            }
+            return staticEval(b, w);
+        }
+
+        Bitboard movesBB = generateMoves(isBlack ? b : w, isBlack ? w : b);
+        // Handle Pass Turn
+        if (movesBB == 0) {
+            uint64_t nextHash = hash ^ sideToMoveKey;
+            return -searchEnhanced(b, w, depth - 1, -beta, -alpha, !isBlack, ply + 1, nextHash, nnEval);
+        }
+
+        std::vector<int> moves = getOrderedMoves(b, w, isBlack, ply);
+        int bestMove = -1;
+        int bestScore = -100000;
+
+        for (int m : moves) {
+            Bitboard nb = b, nw = w;
+            applyMove(nb, nw, m, isBlack);
+            
+            uint64_t nextHash = hash ^ zobristKeys[isBlack ? 0 : 1][m] ^ sideToMoveKey; 
+            int score = -searchEnhanced(nb, nw, depth - 1, -beta, -alpha, !isBlack, ply + 1, nextHash, nnEval);
+            
+            if (score > bestScore) {
+                bestScore = score;
+                bestMove = m;
+            }
+            alpha = std::max(alpha, bestScore);
+            if (alpha >= beta) {
+                killerMoves[ply][1] = killerMoves[ply][0]; 
+                killerMoves[ply][0] = m;
+                break;
+            }
+        }
+        transpositionTable[hash] = {bestScore, depth, 0, bestMove};
+        return bestScore;
     }
-    
-    bool is_terminal(Bitboard s, Bitboard o) { return generate_moves(s, o) == 0 && generate_moves(o, s) == 0; }
-    
-    std::vector<int> bit_indices(Bitboard b) {
-        std::vector<int> res;
-        while(b) { int i = __builtin_ctzll(b); res.push_back(i); b &= (b-1); }
-        return res;
+
+private:
+    void initializeZobrist() {
+        for(int i = 0; i < 64; ++i) {
+            zobristKeys[0][i] = ((uint64_t)rand() << 32) | rand();
+            zobristKeys[1][i] = ((uint64_t)rand() << 32) | rand();
+        }
+        sideToMoveKey = ((uint64_t)rand() << 32) | rand();
     }
-    
-    std::vector<int> get_ordered_moves(Bitboard s, Bitboard o, int ply) {
-        std::vector<int> m = bit_indices(generate_moves(s, o));
-        // Sort using killerMoves[ply][9]
-        return m; 
+
+    int staticEval(Bitboard b, Bitboard w) {
+        return __builtin_popcountll(b) - __builtin_popcountll(w);
     }
-    
-    uint64_t update_hash(uint64_t h, int m, Bitboard s, Bitboard o) { return h ^ zobristTable[m]; }
+
+    bool isTerminal(Bitboard b, Bitboard w) {
+        return generateMoves(b, w) == 0 && generateMoves(w, b) == 0;
+    }
+
+    std::vector<int> getIndices(Bitboard b) {
+        std::vector<int> indices;
+        while(b) {
+            indices.push_back(__builtin_ctzll(b));
+            b &= (b - 1);
+        }
+        return indices;
+    }
+
+    std::vector<int> getOrderedMoves(Bitboard b, Bitboard w, bool isBlack, int ply) {
+        return getIndices(generateMoves(isBlack ? b : w, isBlack ? w : b));
+    }
+
+    void applyMove(Bitboard& b, Bitboard& w, int pos, bool isBlack) {
+        Bitboard m = 1ULL << pos;
+        if (isBlack) b |= m; else w |= m;
+    }
 };

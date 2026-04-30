@@ -1,0 +1,1 @@
+/usr/bin/c++  -arch arm64 -bundle -Wl,-headerpad_max_install_names -Xlinker -undefined -Xlinker dynamic_lookup -flto -o othello_core.cpython-314-darwin.so CMakeFiles/othello_core.dir/src/python_bindings/bindings.cpp.o
