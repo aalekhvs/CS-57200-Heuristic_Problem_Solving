@@ -3,7 +3,7 @@ import numpy as np
 
 def parse_wthor_file(file_path):
     """
-    Parses expert game data from WTHOR binary files.[cite: 312, 313]
+    Parses expert game data from WTHOR binary files.
     """
     games = []
     try:
