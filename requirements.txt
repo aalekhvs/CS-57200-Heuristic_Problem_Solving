@@ -3,3 +3,6 @@ torch>=2.2.0
 pybind11>=2.11.0
 matplotlib>=3.8.0
 tqdm>=4.66.0
+# Add these for the experiment scripts and C++ bridging
+cppimport>=22.08.02
+scipy>=1.12.0
