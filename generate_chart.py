@@ -203,3 +203,5 @@ autolabel_score(rects4, ax2)
 plt.tight_layout()
 plt.savefig('figure4_latency_vs_accuracy.png', dpi=300, bbox_inches='tight')
 print("✅ Success! 'figure4_latency_vs_accuracy.png' has been saved.")
+
+#Code used to generate images based on the findings
