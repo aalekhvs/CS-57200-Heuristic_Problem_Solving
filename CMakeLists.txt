@@ -3,7 +3,7 @@ project(OthelloCore)
 
 set(CMAKE_CXX_STANDARD 17)
 
-# Fix the CMP0148 warning by forcing pybind11 to use modern CMake Python discovery
+# Fixing the CMP0148 warning by forcing pybind11 to use modern CMake Python discovery
 set(PYBIND11_FINDPYTHON ON)
 
 # Find PyBind11
