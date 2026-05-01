@@ -4,7 +4,7 @@
 #include <unordered_map>
 #include <algorithm>
 #include <cstdlib>
-#include <functional> // REQUIRED: For Python callback mapping
+#include <functional>
 
 typedef uint64_t Bitboard;
 
