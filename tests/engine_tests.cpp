@@ -3,7 +3,7 @@
 
 /**
  * @test MinimaxCorrectness
- * Ensures the engine identifies a winning move sequence in a known endgame state.[12]
+ * Ensures the engine identifies a winning move sequence in a known endgame state.
  */
 TEST(EngineTest, MinimaxCorrectness) {
     OthelloEngine engine;
@@ -15,7 +15,7 @@ TEST(EngineTest, MinimaxCorrectness) {
 
 /**
  * @test ZobristConsistency
- * Verifies that the Zobrist hash updates are correctly reversible via XOR.[4]
+ * Verifies that the Zobrist hash updates are correctly reversible via XOR.
  */
 TEST(EngineTest, ZobristConsistency) {
     OthelloEngine engine;
