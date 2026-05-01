@@ -8,7 +8,7 @@ A hybrid adversarial search agent for Othello (Reversi) that synthesizes high-pe
 3.  **Dynamic Move Ordering:** Implements the **Killer Move Heuristic** to prioritize refutation moves, achieving a 98.7% reduction in node expansion at Depth 10.
 4.  **Neural Heuristic Evaluation:** Employs a PyTorch **Multi-Head Attention** Transformer trained on expert WTHOR data to identify global spatial stability that traditional piece-counting heuristics fail to capture.
 
-## 📂 Repository Structure
+## Repository Structure
 * **`src/engine/`**: High-performance C++ search core utilizing bitboards and the Alpha-Beta algorithm.
 * **`src/bridge/`**: PyBind11 integration layer for cross-language data serialization and neural callbacks.
 * **`src/neural/`**: PyTorch Transformer definitions, model weights, and WTHOR dataset parsers.
