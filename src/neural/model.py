@@ -3,7 +3,7 @@ import torch.nn as nn
 
 class OthelloTransformerEval(nn.Module):
     """
-    Transformer model for board evaluation.
+    Transformer model for board evaluation .
     Uses multi-head attention to capture long-range dependencies.[10, 11]
     """
     def __init__(self, embed_dim=128, num_heads=8):
